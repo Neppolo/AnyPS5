@@ -4,6 +4,7 @@
 #include "prx/libSceAgcDriver/Execution/include/Driver/Queues/WorkerAffinity.hpp"
 #include "prx/libSceAgcDriver/Execution/include/GuestMemory.hpp"
 #include "prx/libSceAgcDriver/Execution/include/PerformanceTimer.hpp"
+#include "prx/libSceAgcDriver/Graphics/include/GuestBufferMemory.hpp"
 #include <algorithm>
 #include "prx/libSceAgcDriver/Execution/include/TracyZone.hpp"
 #include <cstdlib>
@@ -147,7 +148,7 @@ void Driver::Present(const PresentationWindow& window, const DisplayBuffer* buff
         gpuReady(context);
         timing.Mark("release_and_callback");
         TracyZone::MarkFrame();
-        if (profile) reportPresents(waitedMs, inFlight);
+        if (profile) reportPresents(waitedMs, inFlight, presenting);
         CheckFailure();
     } catch (const ProcessShutdown&) {
         throw;
@@ -157,7 +158,7 @@ void Driver::Present(const PresentationWindow& window, const DisplayBuffer* buff
     }
 }
 
-void Driver::reportPresents(double waitedMs, std::size_t inFlight) {
+void Driver::reportPresents(double waitedMs, std::size_t inFlight, const std::shared_ptr<VulkanDevice>& presenting) {
     static std::vector<double> waits;
     static VulkanDevice::PresentStatistics previous{};
     static std::uint64_t previousFlips = 0, windowSerial = 0, previousUnsignaled = 0;
@@ -182,6 +183,7 @@ void Driver::reportPresents(double waitedMs, std::size_t inFlight) {
     previousFlips = flipsCounted.load();
     previousUnsignaled = flipBatchesUnsignaled.load();
     waits.clear();
+    Graphics::ReportHostMemory(presenting->graphicsContext());
 }
 
 void Driver::ReleaseWindow(void* window) {
