@@ -114,7 +114,7 @@ private:
     bool queue0Before(std::uint64_t received) const;
     bool orderReleased(std::uint32_t queue, std::uint64_t received) const;
     void noteWaitBlocked(std::uint32_t queue, std::uint64_t awaited, bool blocked);
-    void reportPresents(double waitedMs, std::size_t inFlight);
+    void reportPresents(double waitedMs, std::size_t inFlight, const std::shared_ptr<VulkanDevice>& presenting);
     static bool stampValidate();
     static bool dataHits();
     static bool verifyDataHits();

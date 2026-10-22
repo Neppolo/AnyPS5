@@ -96,6 +96,8 @@ const char* ImportRequesterName(ImportRequester requester);
 HostImportCounts HostImportCounters();
 std::string FormatHostImportCounts(const HostImportCounts& counts);
 void ReportHostImports();
+std::string FormatHostMemoryHeaps(const VkPhysicalDeviceMemoryProperties& memory, const VkPhysicalDeviceMemoryBudgetPropertiesEXT& reported);
+void ReportHostMemory(const Context& context);
 
 // The host import of the registered allocation containing [address, address + bytes), made on demand
 // (alignment and budget permitting), or null. Bytes at `address` are at `HostImportOffset(*import,

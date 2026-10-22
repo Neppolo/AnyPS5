@@ -1481,9 +1481,13 @@ std::uint64_t effectiveBudget(const Context& context, HostImports& state) {
     return HostImportBudgetWith(configured, set, reported, state.allocationFailed, state.ceiling);
 }
 
-std::string budgetSource(const Context& context, const HostImports& state, std::uint64_t budget) {
+const char* budgetOrigin(const Context& context, const HostImports& state, std::uint64_t budget) {
     const auto configured = importBudget(context);
-    const char* source = state.ceiling != 0 && budget == state.ceiling ? "lowered after vkAllocateMemory failed" : budget < configured ? "the host heap's VK_EXT_memory_budget report" : configuredBudget() != 0 ? "APS5_HOST_IMPORT_MIB" : "the default";
+    return state.ceiling != 0 && budget == state.ceiling ? "lowered after vkAllocateMemory failed" : budget < configured ? "the host heap's VK_EXT_memory_budget report" : configuredBudget() != 0 ? "APS5_HOST_IMPORT_MIB" : "the default";
+}
+
+std::string budgetSource(const Context& context, const HostImports& state, std::uint64_t budget) {
+    const char* source = budgetOrigin(context, state, budget);
     if (state.reportedHeapBudget == 0) return source;
     char text[192];
     std::snprintf(text, sizeof(text), "%s; host heap %u reports a budget of %llu MiB and a usage of %llu MiB", source, state.reportedHeap, static_cast<unsigned long long>(state.reportedHeapBudget >> 20u), static_cast<unsigned long long>(state.reportedHeapUsage >> 20u));
@@ -3383,6 +3387,33 @@ void ReportHostImports() {
     const auto counts = HostImportCounters();
     if (std::all_of(counts.requesters.begin(), counts.requesters.end(), [](const HostImportRequesterCounts& requested) { return requested.made == 0 && requested.refused == 0 && requested.failed == 0; })) return;
     std::fprintf(stderr, "[gpu] host imports at shutdown: %s\n", FormatHostImportCounts(counts).c_str());
+}
+
+std::string FormatHostMemoryHeaps(const VkPhysicalDeviceMemoryProperties& memory, const VkPhysicalDeviceMemoryBudgetPropertiesEXT& reported) {
+    std::string text;
+    for (std::uint32_t index = 0; index < memory.memoryHeapCount; ++index) {
+        char part[128];
+        std::snprintf(part, sizeof(part), "%sheap %u (%s, %llu MiB): budget %llu MiB, usage %llu MiB", index == 0 ? "" : "; ", index, (memory.memoryHeaps[index].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0 ? "device-local" : "host", static_cast<unsigned long long>(memory.memoryHeaps[index].size >> 20u), static_cast<unsigned long long>(reported.heapBudget[index] >> 20u), static_cast<unsigned long long>(reported.heapUsage[index] >> 20u));
+        text += part;
+    }
+    return text;
+}
+
+void ReportHostMemory(const Context& context) {
+    const auto counts = FormatHostImportCounts(HostImportCounters());
+    auto& state = Imports();
+    std::unique_lock lock(state.mutex);
+    const auto budget = effectiveBudget(context, state);
+    const char* origin = budgetOrigin(context, state, budget);
+    lock.unlock();
+    std::string heaps = "no VK_EXT_memory_budget report";
+    if (context.memoryProperties2 != nullptr && context.physical != VK_NULL_HANDLE) {
+        VkPhysicalDeviceMemoryBudgetPropertiesEXT reported{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT};
+        VkPhysicalDeviceMemoryProperties2 properties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2, &reported};
+        context.memoryProperties2(context.physical, &properties);
+        heaps = FormatHostMemoryHeaps(context.memory, reported);
+    }
+    AgcDriver::ProfilePrint_nid_no_patch("[gpu] host memory: imports %s; import budget %llu MiB (%s); %s\n", counts.c_str(), static_cast<unsigned long long>(budget >> 20u), origin, heaps.c_str());
 }
 
 HostImportSettleCounts HostImportSettles() {

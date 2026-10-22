@@ -1140,6 +1140,18 @@ void hostImportReportTests() {
     counts.requesters[static_cast<std::size_t>(ImportRequester::Segment)] = {1, 1u << 16u, 0, 0, 2};
     const auto text = FormatHostImportCounts(counts);
     Require(text == "3 live (3.0 MiB); made 8 (5.1 MiB), refused 7 (3.5 MiB, 4 remembered), failed 3; by requester (made/refused/failed): map 2/0/0, build 5/7/1, access 0/0/0, join 0/0/0, segment 1/0/2", "the host import report is wrong: " + text);
+    VkPhysicalDeviceMemoryProperties memory{};
+    memory.memoryHeapCount = 2;
+    memory.memoryHeaps[0] = {std::uint64_t{8} << 30u, VK_MEMORY_HEAP_DEVICE_LOCAL_BIT};
+    memory.memoryHeaps[1] = {std::uint64_t{16} << 30u, 0};
+    VkPhysicalDeviceMemoryBudgetPropertiesEXT reported{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT};
+    reported.heapBudget[0] = std::uint64_t{7} << 30u;
+    reported.heapUsage[0] = std::uint64_t{3} << 30u;
+    reported.heapBudget[1] = std::uint64_t{12} << 30u;
+    reported.heapUsage[1] = std::uint64_t{9} << 30u;
+    reported.heapBudget[2] = std::uint64_t{1} << 30u;
+    const auto heaps = FormatHostMemoryHeaps(memory, reported);
+    Require(heaps == "heap 0 (device-local, 8192 MiB): budget 7168 MiB, usage 3072 MiB; heap 1 (host, 16384 MiB): budget 12288 MiB, usage 9216 MiB", "the host memory heap report is wrong: " + heaps);
 }
 
 class PieceWindow {
